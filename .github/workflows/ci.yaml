@@ -8,28 +8,52 @@ on:
 jobs:
   build-check-typescript:
     name: Build and check the TypeScript Action
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: DeterminateSystems/determinate-nix-action@v3
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: DeterminateSystems/determinate-nix-action@main
       - uses: DeterminateSystems/flakehub-cache-action@main
-      - run: nix develop --command pnpm install
-      - run: nix develop --command pnpm run format
-      - run: nix develop --command pnpm run lint
-      - run: nix develop --command pnpm run build
-      - run: nix develop --command pnpm run package
-      - run: git status --porcelain=v1
-      - run: git diff --exit-code
+
+      - name: Get npm cache directory
+        id: npm-cache-directory
+        run: |
+          echo "directory=$(nix develop --command npm config get cache | tr -d '\n')" >> $GITHUB_OUTPUT
+
+      - name: Set up npm cache
+        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5.0.5
+        with:
+          path: ${{ steps.npm-cache-directory.outputs.directory }}
+          key: flake-checker-action-npm-cache-${{ hashFiles('**/package-lock.json') }}
+          restore-keys: |
+            flake-checker-action-npm-cache
+
+      - run: nix develop --command npm ci
+      - run: nix develop --command npm run format
+      - run: nix develop --command npm run lint
+      - run: nix develop --command npm run build
+      - run: nix develop --command npm run package
+      - name: git status
+        run: git status --porcelain=v1
+      - name: Ensure no unstaged changes
+        run: git diff --exit-code
+      - name: Ensure no staged changes
+        run: git diff --cached --exit-code
 
   run-x86_64-linux-clean:
     name: Run x86_64 Linux (clean)
     needs: build-check-typescript
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - name: Check flake.lock
         uses: ./
         with:
@@ -38,9 +62,13 @@ jobs:
   run-x86_64-linux-dirty:
     name: Run x86_64 Linux (dirty)
     needs: build-check-typescript
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - name: Check flake.lock
         uses: ./
         with:
@@ -51,8 +79,12 @@ jobs:
     name: Run x86_64 Darwin (clean)
     needs: build-check-typescript
     runs-on: macos-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - name: Check flake.lock
         uses: ./
         with:
@@ -62,8 +94,12 @@ jobs:
     name: Run x86_64 Darwin (dirty)
     needs: build-check-typescript
     runs-on: macos-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
       - name: Check flake.lock
         uses: ./
         with:
@@ -72,6 +108,8 @@ jobs:
 
   success:
     name: Success
+    permissions:
+      contents: read
     needs:
       - run-x86_64-linux-clean
       - run-x86_64-linux-dirty
